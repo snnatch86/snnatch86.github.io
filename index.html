@@ -75,6 +75,25 @@
     .hint{padding:10px 12px;border-radius:12px;background:#0e172a;color:#cbd5e1;font-size:13px}
     .log{font-family:ui-monospace,monospace;font-size:12px;color:#9ca3af;max-height:120px;overflow:auto;white-space:pre-wrap}
     .hidden{display:none!important}
+  
+    .cockpit{max-width:560px;margin-left:auto;margin-right:auto;text-align:center}
+    .cockpit video{display:block;object-fit:contain;max-height:28vh;max-height:28svh}
+    .cockpit .title2{font-size:14px;margin-bottom:6px}
+    .cockpit .joystickWrap{padding:6px 0}
+    .cockpit .joystick{width:min(48vw,25vh,220px);width:min(48vw,25svh,220px)}
+    .cockpit .m3{margin-top:6px;gap:8px}
+    .cockpit .motorBtn{min-height:48px;padding:6px;font-size:16px}
+    .cockpit .motorBtn br{display:none}
+    .cockpit .danger{margin-top:8px;padding:10px;font-size:16px;min-height:44px}
+    .cameraDisplay{position:relative;background:#020617;border-radius:16px;overflow:hidden}
+    .cameraDisplay video{display:block;object-fit:contain}
+    .fullscreenButton{display:block;margin:8px auto;min-height:44px}
+    .cameraDisplay:fullscreen,.cameraDisplay.expanded{width:100%;height:100%;background:#020617;border-radius:0}
+    .cameraDisplay.expanded{position:fixed;inset:0;z-index:1000;height:100dvh}
+    .cameraDisplay:fullscreen video,.cameraDisplay.expanded video{width:100%;height:100%;aspect-ratio:auto;border-radius:0;object-fit:contain}
+    .cameraDisplay:fullscreen .fullscreenButton,.cameraDisplay.expanded .fullscreenButton{position:absolute;right:max(12px,env(safe-area-inset-right));top:max(12px,env(safe-area-inset-top));margin:0;background:#1b2440e8}
+    body.cameraExpanded{overflow:hidden}
+    @media(max-width:700px){.cockpit{padding:8px}.app{padding:10px 10px 24px}}
   </style>
 </head>
 <body>
@@ -98,13 +117,9 @@
       <div class="small" style="margin-top:8px">M1 = chenille gauche · M2 = chenille droite · M3 = montée / descente</div>
     </div>
 
-    <div class="controls">
-      <div class="card">
-        <div class="title2">Déplacement</div>
-        <div class="rangeLine">
-          <input id="drivePower" type="range" min="20" max="100" value="65">
-          <strong><span id="drivePowerValue">65</span>%</strong>
-        </div>
+    <div class="card cockpit" aria-label="Pilotage avec retour vidéo">
+      <div class="title2">Retour vidéo du robot</div>
+      <video id="remoteVideo" autoplay playsinline muted></video>
         <div class="joystickWrap">
           <div id="joystick" class="joystick">
             <span class="axis up">▲</span><span class="axis down">▼</span>
@@ -112,6 +127,21 @@
             <div id="stick" class="stick"></div>
           </div>
         </div>
+      <div class="small">M3 — Rotation caméra</div>
+        <div class="m3">
+          <button id="m3Up" class="motorBtn">◀<br>GAUCHE</button>
+          <button id="m3Down" class="motorBtn">▶<br>DROITE</button>
+        </div>
+        <button id="stopAll" class="danger">🛑 ARRÊT</button>
+    </div>
+    <div class="controls">
+      <div class="card">
+        <div class="title2">Déplacement</div>
+        <div class="rangeLine">
+          <input id="drivePower" type="range" min="20" max="100" value="65">
+          <strong><span id="drivePowerValue">65</span>%</strong>
+        </div>
+
 
         <details>
           <summary>Réglage du sens des chenilles</summary>
@@ -127,14 +157,11 @@
           <input id="m3Power" type="range" min="15" max="100" value="55">
           <strong><span id="m3PowerValue">55</span>%</strong>
         </div>
-        <div class="m3">
-          <button id="m3Up" class="motorBtn">◀<br>GAUCHE</button>
-          <button id="m3Down" class="motorBtn">▶<br>DROITE</button>
-        </div>
+
         <label class="toggle"><input id="invertM3" type="checkbox"> Inverser le sens M3</label>
 
         <div style="height:12px"></div>
-        <button id="stopAll" class="danger">🛑 ARRÊT</button>
+
         <div class="small" style="margin-top:8px">La commande se coupe aussi automatiquement si le téléphone cesse d'envoyer des trames.</div>
       </div>
     </div>
@@ -149,7 +176,7 @@
         <button id="copyCode" class="secondary">Copier le code</button>
       </div>
       <div style="height:10px"></div>
-      <video id="remoteVideo" autoplay playsinline muted></video>
+
       <div style="height:10px"></div>
       <div class="row between">
         <div class="small">Ta caméra frontale sera envoyée au téléphone sur le robot.</div>
@@ -172,7 +199,10 @@
       <div style="height:12px"></div>
       <button id="startCamera" class="primary">📷 Démarrer la caméra frontale</button>
       <div style="height:10px"></div>
-      <video id="localVideo" autoplay playsinline muted></video>
+      <div id="cameraDisplay" class="cameraDisplay">
+        <video id="localVideo" autoplay playsinline muted></video>
+        <button id="toggleFullscreen" class="secondary fullscreenButton" type="button" aria-pressed="false">⛶ Plein écran</button>
+      </div>
     </div>
 
     <div class="card">
@@ -573,6 +603,41 @@
       $("cameraStatus").textContent = "Erreur : " + (err.message || err);
     }
   });
+})();
+</script>
+<script>
+// Présentation uniquement : aucun changement des flux ou des commandes.
+(() => {
+  const display = document.getElementById('cameraDisplay');
+  const button = document.getElementById('toggleFullscreen');
+  function sync(){
+    const active = document.fullscreenElement === display || display.classList.contains('expanded');
+    button.textContent = active ? '✕ Quitter le plein écran' : '⛶ Plein écran';
+    button.setAttribute('aria-pressed', String(active));
+  }
+  function closeFallback(){
+    display.classList.remove('expanded');
+    document.body.classList.remove('cameraExpanded');
+    sync();
+  }
+  button.addEventListener('click', async () => {
+    if(document.fullscreenElement === display){
+      await document.exitFullscreen();
+    } else if(display.classList.contains('expanded')){
+      closeFallback();
+    } else {
+      try {
+        if(!display.requestFullscreen) throw new Error('Fullscreen unavailable');
+        await display.requestFullscreen();
+      } catch {
+        display.classList.add('expanded');
+        document.body.classList.add('cameraExpanded');
+      }
+    }
+    sync();
+  });
+  document.addEventListener('fullscreenchange', sync);
+  document.addEventListener('keydown', event => { if(event.key === 'Escape') closeFallback(); });
 })();
 </script>
 </body>
