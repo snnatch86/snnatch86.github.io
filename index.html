@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="theme-color" content="#111827" />
+  <title>RoboMaker Control</title>
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+  <style>
+    :root{
+      --bg:#0b1020;
+      --panel:#131a2d;
+      --panel2:#1b2440;
+      --text:#f8fafc;
+      --muted:#9ca3af;
+      --accent:#22c55e;
+      --danger:#ef4444;
+      --blue:#3b82f6;
+      --border:#2b3658;
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;overscroll-behavior:none}
+    body{min-height:100vh}
+    button,input{font:inherit}
+    .app{max-width:900px;margin:auto;padding:16px 14px 30px}
+    h1{font-size:22px;margin:0 0 14px}
+    .tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+    .tab{border:1px solid var(--border);background:var(--panel);color:var(--text);padding:12px;border-radius:14px;font-weight:800}
+    .tab.active{background:var(--blue);border-color:var(--blue)}
+    .panel{display:none}
+    .panel.active{display:block}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:14px;margin-bottom:12px}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .between{justify-content:space-between}
+    .status{display:inline-flex;align-items:center;gap:7px;font-size:14px;color:var(--muted)}
+    .dot{width:10px;height:10px;border-radius:50%;background:#6b7280}
+    .dot.ok{background:var(--accent);box-shadow:0 0 12px rgba(34,197,94,.7)}
+    .primary,.secondary,.danger,.motorBtn{
+      border:0;border-radius:14px;padding:12px 16px;font-weight:800;color:white
+    }
+    .primary{background:var(--blue)}
+    .secondary{background:var(--panel2);border:1px solid var(--border)}
+    .danger{background:var(--danger);width:100%;font-size:18px;padding:15px}
+    .controls{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width:700px){.controls{grid-template-columns:1fr}}
+    .title2{font-weight:900;margin-bottom:10px}
+    .joystickWrap{display:grid;place-items:center;padding:10px 0}
+    .joystick{
+      width:min(70vw,290px);aspect-ratio:1;border-radius:50%;
+      background:radial-gradient(circle at center,#283452 0 17%,#182039 18% 62%,#11182b 63%);
+      border:2px solid #384766;position:relative;touch-action:none;user-select:none
+    }
+    .stick{
+      width:35%;aspect-ratio:1;border-radius:50%;position:absolute;left:32.5%;top:32.5%;
+      background:linear-gradient(145deg,#64748b,#334155);border:2px solid #94a3b8;
+      box-shadow:0 10px 30px rgba(0,0,0,.35);transform:translate(0,0)
+    }
+    .axis{position:absolute;color:#7f8ba6;font-weight:900;font-size:22px}
+    .axis.up{top:10px;left:50%;transform:translateX(-50%)}
+    .axis.down{bottom:10px;left:50%;transform:translateX(-50%)}
+    .axis.left{left:14px;top:50%;transform:translateY(-50%)}
+    .axis.right{right:14px;top:50%;transform:translateY(-50%)}
+    .rangeLine{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center}
+    input[type=range]{width:100%;accent-color:var(--blue)}
+    .m3{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+    .motorBtn{background:var(--panel2);border:1px solid var(--border);min-height:80px;font-size:20px;touch-action:none}
+    .motorBtn:active,.motorBtn.active{background:var(--blue)}
+    .small{font-size:13px;color:var(--muted);line-height:1.4}
+    details{margin-top:10px}
+    summary{cursor:pointer;color:#cbd5e1;font-weight:700}
+    label.toggle{display:flex;gap:8px;align-items:center;margin:10px 0}
+    video{width:100%;background:#020617;border-radius:16px;aspect-ratio:16/9;object-fit:cover}
+    .code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:24px;font-weight:900;letter-spacing:1px}
+    .input{width:100%;background:#0d1426;color:white;border:1px solid var(--border);border-radius:12px;padding:12px}
+    .hint{padding:10px 12px;border-radius:12px;background:#0e172a;color:#cbd5e1;font-size:13px}
+    .log{font-family:ui-monospace,monospace;font-size:12px;color:#9ca3af;max-height:120px;overflow:auto;white-space:pre-wrap}
+    .hidden{display:none!important}
+  </style>
+</head>
+<body>
+<div class="app">
+  <h1>🤖 RoboMaker Control — MVP</h1>
+
+  <div class="tabs">
+    <button class="tab active" data-panel="remotePanel">Télécommande</button>
+    <button class="tab" data-panel="cameraPanel">Caméra</button>
+  </div>
+
+  <section id="remotePanel" class="panel active">
+    <div class="card">
+      <div class="row between">
+        <div>
+          <div class="title2">Boîtier « Déplacement »</div>
+          <div class="status"><span id="bleDot" class="dot"></span><span id="bleStatus">Non connecté</span></div>
+        </div>
+        <button id="connectBle" class="primary">Connecter EVRobot2</button>
+      </div>
+      <div class="small" style="margin-top:8px">M1 = chenille gauche · M2 = chenille droite · M3 = montée / descente</div>
+    </div>
+
+    <div class="controls">
+      <div class="card">
+        <div class="title2">Déplacement</div>
+        <div class="rangeLine">
+          <input id="drivePower" type="range" min="20" max="100" value="65">
+          <strong><span id="drivePowerValue">65</span>%</strong>
+        </div>
+        <div class="joystickWrap">
+          <div id="joystick" class="joystick">
+            <span class="axis up">▲</span><span class="axis down">▼</span>
+            <span class="axis left">◀</span><span class="axis right">▶</span>
+            <div id="stick" class="stick"></div>
+          </div>
+        </div>
+
+        <details>
+          <summary>Réglage du sens des chenilles</summary>
+          <label class="toggle"><input id="invertM1" type="checkbox"> Inverser M1 (gauche)</label>
+          <label class="toggle"><input id="invertM2" type="checkbox"> Inverser M2 (droite)</label>
+          <div class="small">Par défaut : M1 et M2 sont réglés comme le montage de référence EVRobot2. Si le robot part à l'envers ou tourne au lieu d'avancer, utilise ces cases.</div>
+        </details>
+      </div>
+
+      <div class="card">
+        <div class="title2">M3 — Rotation caméra</div>
+        <div class="rangeLine">
+          <input id="m3Power" type="range" min="15" max="100" value="55">
+          <strong><span id="m3PowerValue">55</span>%</strong>
+        </div>
+        <div class="m3">
+          <button id="m3Up" class="motorBtn">◀<br>GAUCHE</button>
+          <button id="m3Down" class="motorBtn">▶<br>DROITE</button>
+        </div>
+        <label class="toggle"><input id="invertM3" type="checkbox"> Inverser le sens M3</label>
+
+        <div style="height:12px"></div>
+        <button id="stopAll" class="danger">🛑 ARRÊT</button>
+        <div class="small" style="margin-top:8px">La commande se coupe aussi automatiquement si le téléphone cesse d'envoyer des trames.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row between">
+        <div>
+          <div class="title2">Retour vidéo</div>
+          <div class="small">Code à saisir sur le smartphone-caméra :</div>
+          <div id="peerCode" class="code">...</div>
+        </div>
+        <button id="copyCode" class="secondary">Copier le code</button>
+      </div>
+      <div style="height:10px"></div>
+      <video id="remoteVideo" autoplay playsinline muted></video>
+      <div style="height:10px"></div>
+      <div class="row between">
+        <div class="small">Ta caméra frontale sera envoyée au téléphone sur le robot.</div>
+        <button id="startControllerCamera" class="secondary">🤳 Activer ma caméra</button>
+      </div>
+      <video id="controllerLocalVideo" autoplay playsinline muted style="margin-top:10px;max-height:180px"></video>
+      <div id="videoStatus" class="small" style="margin-top:8px">En attente de la caméra…</div>
+    </div>
+
+    <div class="card">
+      <div class="title2">Journal</div>
+      <div id="log" class="log"></div>
+    </div>
+  </section>
+
+  <section id="cameraPanel" class="panel">
+    <div class="card">
+      <div class="title2">Smartphone embarqué — Visio robot</div>
+      <div class="hint">Ce téléphone est fixé sur le robot. Sa caméra frontale envoie l'image vers la télécommande et son écran affiche la vidéo du téléphone de commande.</div>
+      <div style="height:12px"></div>
+      <button id="startCamera" class="primary">📷 Démarrer la caméra frontale</button>
+      <div style="height:10px"></div>
+      <video id="localVideo" autoplay playsinline muted></video>
+    </div>
+
+    <div class="card">
+      <label for="controllerId" class="title2">Code de la télécommande</label>
+      <input id="controllerId" class="input" autocomplete="off" autocapitalize="none" placeholder="Ex. robo-a7k2p9">
+      <div style="height:10px"></div>
+      <button id="sendVideo" class="primary" style="width:100%">📡 Envoyer la vidéo</button>
+      <div id="cameraStatus" class="small" style="margin-top:10px">Caméra inactive.</div>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  // ----- UI helpers -----
+  const $ = (id) => document.getElementById(id);
+  const logEl = $("log");
+  function log(msg){
+    const t = new Date().toLocaleTimeString();
+    logEl.textContent = `[${t}] ${msg}\n` + logEl.textContent;
+  }
+  document.querySelectorAll(".tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+      btn.classList.add("active");
+      $(btn.dataset.panel).classList.add("active");
+    });
+  });
+
+  $("drivePower").addEventListener("input", e => $("drivePowerValue").textContent = e.target.value);
+  $("m3Power").addEventListener("input", e => $("m3PowerValue").textContent = e.target.value);
+
+  // ----- RoboMaker BLE -----
+  const SERVICE_UUID = "2f5772da-18e3-4f2e-82ab-910e81b9f232";
+  const SENSOR_UUID  = "5e366294-5436-4356-a009-7ccd1e03526d";
+  const MOTOR_UUID   = "165aecf8-ed44-45e7-aae4-63789234a30f";
+
+  let bleDevice = null;
+  let motorCharacteristic = null;
+  let sensorCharacteristic = null;
+  let writing = false;
+  let pendingFrame = null;
+  let desired = [0, 0, 0]; // M1, M2, M3 in [-1..1]
+
+  function bleStatus(text, ok=false){
+    $("bleStatus").textContent = text;
+    $("bleDot").classList.toggle("ok", ok);
+  }
+
+  $("connectBle").addEventListener("click", async () => {
+    try{
+      if (!navigator.bluetooth) throw new Error("Web Bluetooth n'est pas disponible dans ce navigateur.");
+      bleStatus("Recherche…");
+      bleDevice = await navigator.bluetooth.requestDevice({
+        filters: [{ namePrefix: "EVRobot2" }],
+        optionalServices: [SERVICE_UUID]
+      });
+      bleDevice.addEventListener("gattserverdisconnected", () => {
+        motorCharacteristic = null;
+        sensorCharacteristic = null;
+        desired = [0,0,0];
+        bleStatus("Déconnecté");
+        log("Bluetooth déconnecté.");
+      });
+
+      bleStatus("Connexion…");
+      const server = await bleDevice.gatt.connect();
+      const service = await server.getPrimaryService(SERVICE_UUID);
+      motorCharacteristic = await service.getCharacteristic(MOTOR_UUID);
+      sensorCharacteristic = await service.getCharacteristic(SENSOR_UUID);
+
+      // Important sur EVRobot2 : activer les notifications capteurs avant les commandes.
+      await sensorCharacteristic.startNotifications();
+
+      bleStatus(`Connecté : ${bleDevice.name || "EVRobot2"}`, true);
+      log("EVRobot2 connecté. Notifications capteurs activées.");
+      await sendStop();
+    } catch(err){
+      bleStatus("Échec de connexion");
+      log("ERREUR BLE : " + (err.message || err));
+    }
+  });
+
+  function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+
+  function directionByte(motorIndex, speed){
+    const inv = [
+      $("invertM1").checked,
+      $("invertM2").checked,
+      $("invertM3").checked
+    ][motorIndex];
+
+    // Montage de référence documenté :
+    // M1 avant = commande 0 ; M2 avant = commande 1 ; M3 avant = commande 1.
+    let forwardCmd = [0, 1, 1][motorIndex];
+    if (inv) forwardCmd = forwardCmd === 0 ? 1 : 0;
+    const reverseCmd = forwardCmd === 0 ? 1 : 0;
+    return speed >= 0 ? forwardCmd : reverseCmd;
+  }
+
+  function makeFrame(){
+    const driveMax = Number($("drivePower").value) / 100;
+    const m3Max = Number($("m3Power").value) / 100;
+    const out = new Uint8Array(9);
+
+    desired.forEach((s, i) => {
+      const base = i * 3;
+      const max = i < 2 ? driveMax : m3Max;
+      const val = clamp(s, -1, 1);
+
+      if (Math.abs(val) < 0.04){
+        out[base] = 0x02;      // frein
+        out[base+1] = 0x00;    // force 0
+        out[base+2] = 0x00;    // durée 0
+      } else {
+        out[base] = directionByte(i, val);
+        out[base+1] = Math.max(1, Math.round(Math.abs(val) * max * 255));
+        out[base+2] = 0x1E;    // 300 ms ; renouvelé toutes les 100 ms
+      }
+    });
+    return out;
+  }
+
+  async function writeLatest(frame){
+    if (!motorCharacteristic) return;
+    pendingFrame = frame;
+    if (writing) return;
+    writing = true;
+    try{
+      while(pendingFrame && motorCharacteristic){
+        const f = pendingFrame;
+        pendingFrame = null;
+        if (typeof motorCharacteristic.writeValueWithoutResponse === "function"){
+          await motorCharacteristic.writeValueWithoutResponse(f);
+        } else {
+          throw new Error("Write Without Response indisponible.");
+        }
+      }
+    } catch(err){
+      log("ERREUR écriture moteur : " + (err.message || err));
+    } finally {
+      writing = false;
+    }
+  }
+
+  function sendCurrent(){ return writeLatest(makeFrame()); }
+
+  async function sendStop(){
+    desired = [0,0,0];
+    const stop = new Uint8Array([2,0,0, 2,0,0, 2,0,0]);
+    await writeLatest(stop);
+  }
+
+  // Réémission : permet de maintenir le mouvement > 300 ms.
+  setInterval(() => {
+    if (!motorCharacteristic) return;
+    if (desired.some(v => Math.abs(v) >= 0.04)) sendCurrent();
+  }, 100);
+
+  $("stopAll").addEventListener("click", () => {
+    resetJoystick();
+    desired = [0,0,0];
+    sendStop();
+    log("ARRÊT demandé.");
+  });
+
+  // ----- Joystick différentiel M1/M2 -----
+  const joy = $("joystick");
+  const stick = $("stick");
+  let joyPointer = null;
+
+  function resetJoystick(){
+    joyPointer = null;
+    stick.style.transform = "translate(0px,0px)";
+    desired[0] = 0;
+    desired[1] = 0;
+    sendCurrent();
+  }
+
+  function updateJoystick(ev){
+    const r = joy.getBoundingClientRect();
+    const cx = r.left + r.width/2, cy = r.top + r.height/2;
+    const radius = r.width * 0.36;
+    let dx = ev.clientX - cx;
+    let dy = ev.clientY - cy;
+    const d = Math.hypot(dx,dy);
+    if (d > radius){ dx = dx/d*radius; dy = dy/d*radius; }
+    stick.style.transform = `translate(${dx}px,${dy}px)`;
+
+    const x = dx / radius;
+    const y = -dy / radius; // haut = avant
+
+    let left = y + x;
+    let right = y - x;
+    const max = Math.max(1, Math.abs(left), Math.abs(right));
+    left /= max; right /= max;
+
+    desired[0] = left;
+    desired[1] = right;
+    sendCurrent();
+  }
+
+  joy.addEventListener("pointerdown", ev => {
+    joyPointer = ev.pointerId;
+    joy.setPointerCapture(ev.pointerId);
+    updateJoystick(ev);
+  });
+  joy.addEventListener("pointermove", ev => {
+    if (ev.pointerId === joyPointer) updateJoystick(ev);
+  });
+  ["pointerup","pointercancel","lostpointercapture"].forEach(type => {
+    joy.addEventListener(type, ev => {
+      if (joyPointer === null || ev.pointerId === joyPointer) resetJoystick();
+    });
+  });
+
+  // ----- M3 boutons maintenus -----
+  function bindHold(button, value){
+    let pointer = null;
+    button.addEventListener("pointerdown", ev => {
+      pointer = ev.pointerId;
+      button.setPointerCapture(ev.pointerId);
+      button.classList.add("active");
+      desired[2] = value;
+      sendCurrent();
+    });
+    const release = ev => {
+      if (pointer === null || ev.pointerId === pointer){
+        pointer = null;
+        button.classList.remove("active");
+        desired[2] = 0;
+        sendCurrent();
+      }
+    };
+    button.addEventListener("pointerup", release);
+    button.addEventListener("pointercancel", release);
+    button.addEventListener("lostpointercapture", release);
+  }
+  bindHold($("m3Up"), +1);
+  bindHold($("m3Down"), -1);
+
+  // Stop si la page perd le focus / passe en arrière-plan.
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) sendStop();
+  });
+  window.addEventListener("pagehide", () => sendStop());
+
+  // ----- Visio bidirectionnelle WebRTC via PeerJS -----
+  let peer = null;
+  let robotStream = null;       // caméra du téléphone fixé sur le robot
+  let controllerStream = null;  // caméra du téléphone de commande
+  let activeCall = null;
+
+  function randomCode(){
+    const chars = "abcdefghjkmnpqrstuvwxyz23456789";
+    let s = "robo-";
+    for(let i=0;i<6;i++) s += chars[Math.floor(Math.random()*chars.length)];
+    return s;
+  }
+
+  async function startFrontCamera(targetVideoId, role){
+    const constraints = {
+      video: {
+        facingMode: { ideal: "user" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        frameRate: { ideal: 30, max: 30 }
+      },
+      audio: true
+    };
+
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    $(targetVideoId).srcObject = stream;
+
+    if (role === "robot") robotStream = stream;
+    if (role === "controller") controllerStream = stream;
+    return stream;
+  }
+
+  function startPeer(){
+    if (typeof Peer === "undefined"){
+      $("peerCode").textContent = "PeerJS indisponible";
+      return;
+    }
+
+    const id = randomCode();
+    peer = new Peer(id);
+
+    peer.on("open", assigned => {
+      $("peerCode").textContent = assigned;
+      log("Visio prête. Code : " + assigned);
+    });
+
+    // Le téléphone robot appelle la télécommande.
+    // La télécommande répond avec sa propre caméra frontale.
+    peer.on("call", async call => {
+      if (activeCall) activeCall.close();
+      activeCall = call;
+      $("videoStatus").textContent = "Connexion visio…";
+
+      try{
+        if (!controllerStream){
+          controllerStream = await startFrontCamera("controllerLocalVideo", "controller");
+        }
+        call.answer(controllerStream);
+      }catch(err){
+        // Si l'utilisateur refuse la caméra du contrôleur, on accepte quand même
+        // le flux entrant sans vidéo locale.
+        log("Caméra commande indisponible : " + (err.message || err));
+        call.answer();
+      }
+
+      call.on("stream", stream => {
+        $("remoteVideo").srcObject = stream;
+        $("videoStatus").textContent = "🟢 Visio connectée";
+        log("Flux du robot reçu.");
+      });
+      call.on("close", () => {
+        $("videoStatus").textContent = "Visio déconnectée.";
+      });
+      call.on("error", err => {
+        $("videoStatus").textContent = "Erreur visio : " + (err.message || err);
+      });
+    });
+
+    peer.on("error", err => {
+      log("ERREUR PeerJS : " + (err.message || err));
+      if (err.type === "unavailable-id"){
+        try{ peer.destroy(); }catch{}
+        setTimeout(startPeer, 300);
+      }
+    });
+  }
+  startPeer();
+
+  $("startControllerCamera").addEventListener("click", async () => {
+    try{
+      if (controllerStream) controllerStream.getTracks().forEach(t => t.stop());
+      await startFrontCamera("controllerLocalVideo", "controller");
+      $("startControllerCamera").textContent = "Caméra active ✓";
+      log("Caméra frontale de la télécommande active.");
+    }catch(err){
+      log("Erreur caméra télécommande : " + (err.message || err));
+    }
+  });
+
+  $("copyCode").addEventListener("click", async () => {
+    const code = $("peerCode").textContent.trim();
+    try{
+      await navigator.clipboard.writeText(code);
+      $("copyCode").textContent = "Copié ✓";
+      setTimeout(() => $("copyCode").textContent = "Copier le code", 1200);
+    }catch{
+      log("Copie impossible, saisis le code manuellement.");
+    }
+  });
+
+  $("startCamera").addEventListener("click", async () => {
+    try{
+      if (robotStream) robotStream.getTracks().forEach(t => t.stop());
+      await startFrontCamera("localVideo", "robot");
+      $("cameraStatus").textContent = "🟢 Caméra frontale prête.";
+    }catch(err){
+      $("cameraStatus").textContent = "Erreur caméra : " + (err.message || err);
+    }
+  });
+
+  $("sendVideo").addEventListener("click", async () => {
+    try{
+      if (!peer) throw new Error("Connexion PeerJS non prête.");
+      if (!robotStream) throw new Error("Démarre d'abord la caméra frontale.");
+      const id = $("controllerId").value.trim();
+      if (!id) throw new Error("Saisis le code de la télécommande.");
+
+      if (activeCall) activeCall.close();
+      $("cameraStatus").textContent = "Connexion à la télécommande…";
+      activeCall = peer.call(id, robotStream, { metadata: { role: "robot" } });
+      if (!activeCall) throw new Error("Impossible de créer l'appel visio.");
+
+      // Le téléphone robot reçoit ici le flux de la télécommande
+      // et l'affiche sur son écran : vrai effet "appel visio sur robot".
+      activeCall.on("stream", stream => {
+        $("localVideo").srcObject = stream;
+        $("cameraStatus").textContent = "🟢 Visio connectée — image de la télécommande affichée.";
+      });
+      activeCall.on("close", () => $("cameraStatus").textContent = "Visio arrêtée.");
+      activeCall.on("error", err => $("cameraStatus").textContent = "Erreur : " + (err.message || err));
+
+      setTimeout(() => {
+        if (activeCall && activeCall.open) {
+          $("cameraStatus").textContent = "🟢 Visio connectée.";
+        } else {
+          $("cameraStatus").textContent = "Connexion en cours…";
+        }
+      }, 1500);
+    }catch(err){
+      $("cameraStatus").textContent = "Erreur : " + (err.message || err);
+    }
+  });
+})();
+</script>
+</body>
+</html>
